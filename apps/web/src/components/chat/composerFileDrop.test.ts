@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import {
   canResolveComposerHostFilePaths,
   composerMentionPathFromAbsolute,
+  hostPathUsableOnPlatform,
   partitionDroppedComposerFiles,
   workspaceRelativeDropPath,
 } from "./composerFileDrop.ts";
@@ -16,6 +17,28 @@ describe("canResolveComposerHostFilePaths", () => {
     expect(canResolveComposerHostFilePaths("SshConnectionTarget")).toBe(false);
     expect(canResolveComposerHostFilePaths("RelayConnectionTarget")).toBe(false);
     expect(canResolveComposerHostFilePaths(null)).toBe(false);
+  });
+});
+
+describe("hostPathUsableOnPlatform", () => {
+  it("rejects Windows renderer paths for a POSIX environment (WSL-only mode)", () => {
+    expect(hostPathUsableOnPlatform("C:\\Users\\me\\file.txt", "linux")).toBe(false);
+    expect(hostPathUsableOnPlatform("\\\\wsl$\\Ubuntu\\home\\me\\file.txt", "linux")).toBe(false);
+  });
+
+  it("accepts paths whose style matches the environment", () => {
+    expect(hostPathUsableOnPlatform("C:\\Users\\me\\file.txt", "windows")).toBe(true);
+    expect(hostPathUsableOnPlatform("/Users/me/file.txt", "darwin")).toBe(true);
+    expect(hostPathUsableOnPlatform("/home/me/file.txt", "linux")).toBe(true);
+  });
+
+  it("rejects POSIX paths for a Windows environment", () => {
+    expect(hostPathUsableOnPlatform("/home/me/file.txt", "windows")).toBe(false);
+  });
+
+  it("allows unknown platforms to preserve behavior", () => {
+    expect(hostPathUsableOnPlatform("C:\\Users\\me\\file.txt", "unknown")).toBe(true);
+    expect(hostPathUsableOnPlatform("/home/me/file.txt", null)).toBe(true);
   });
 });
 

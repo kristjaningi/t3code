@@ -1213,9 +1213,12 @@ function ChatViewContent(props: ChatViewProps) {
     () => new Map(environments.map((environment) => [environment.environmentId, environment])),
     [environments],
   );
+  const composerHostEnvironment = environmentById.get(environmentId);
   const canResolveComposerHostPaths = canResolveComposerHostFilePaths(
-    environmentById.get(environmentId)?.entry.target._tag ?? null,
+    composerHostEnvironment?.entry.target._tag ?? null,
   );
+  const composerEnvironmentPlatformOs =
+    composerHostEnvironment?.serverConfig?.environment.platform.os ?? null;
   const composerDraftTarget: ScopedThreadRef | DraftId =
     routeKind === "server" ? routeThreadRef : props.draftId;
   const draftThread = useComposerDraftStore((store) =>
@@ -6153,6 +6156,7 @@ function ChatViewContent(props: ChatViewProps) {
                             terminalOpen={Boolean(terminalUiState.terminalOpen)}
                             gitCwd={gitCwd}
                             canResolveHostFilePaths={canResolveComposerHostPaths}
+                            environmentPlatformOs={composerEnvironmentPlatformOs}
                             promptRef={promptRef}
                             composerImagesRef={composerImagesRef}
                             composerTerminalContextsRef={composerTerminalContextsRef}

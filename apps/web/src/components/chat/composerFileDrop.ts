@@ -1,4 +1,5 @@
 import type { ConnectionTarget } from "@t3tools/client-runtime/connection";
+import type { ExecutionEnvironmentPlatformOs } from "@t3tools/contracts";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 
 /**
@@ -36,6 +37,23 @@ export function canResolveComposerHostFilePaths(
   targetTag: ConnectionTarget["_tag"] | null,
 ): boolean {
   return targetTag === "PrimaryConnectionTarget";
+}
+
+/**
+ * A resolved host path is only meaningful when the renderer and the selected
+ * environment share a filesystem, which the connection target alone cannot
+ * establish: in desktop WSL-only mode the primary slot is a Linux server on a
+ * Windows host, so getPathForFile yields Windows paths the agent cannot read.
+ * Mismatched path styles are rejected rather than translated because WSL
+ * mount roots are configurable, and a guessed /mnt/c/... path would silently
+ * point the agent at a nonexistent file.
+ */
+export function hostPathUsableOnPlatform(
+  absolutePath: string,
+  environmentOs: ExecutionEnvironmentPlatformOs | null,
+): boolean {
+  if (environmentOs === null || environmentOs === "unknown") return true;
+  return isWindowsAbsolutePath(absolutePath) === (environmentOs === "windows");
 }
 
 /**

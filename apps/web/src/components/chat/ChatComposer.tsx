@@ -1,6 +1,7 @@
 import type {
   ApprovalRequestId,
   EnvironmentId,
+  ExecutionEnvironmentPlatformOs,
   ModelSelection,
   PreviewAnnotationPayload,
   ProviderApprovalDecision,
@@ -49,6 +50,7 @@ import {
 } from "./composerMentionDrag";
 import {
   composerMentionPathFromAbsolute,
+  hostPathUsableOnPlatform,
   partitionDroppedComposerFiles,
   resolveOsDroppedFilePath,
 } from "./composerFileDrop";
@@ -606,6 +608,7 @@ export interface ChatComposerProps {
   terminalOpen: boolean;
   gitCwd: string | null;
   canResolveHostFilePaths: boolean;
+  environmentPlatformOs: ExecutionEnvironmentPlatformOs | null;
 
   // Refs the parent needs kept in sync
   promptRef: React.RefObject<string>;
@@ -698,6 +701,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     terminalOpen,
     gitCwd,
     canResolveHostFilePaths,
+    environmentPlatformOs,
     promptRef,
     composerRef,
     composerImagesRef,
@@ -2416,9 +2420,13 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // Callbacks: paste / drag
   // ------------------------------------------------------------------
   const resolveDroppedFileAbsolutePath = useCallback(
-    (file: File): string | null =>
-      canResolveHostFilePaths ? resolveOsDroppedFilePath(file) : null,
-    [canResolveHostFilePaths],
+    (file: File): string | null => {
+      if (!canResolveHostFilePaths) return null;
+      const absolutePath = resolveOsDroppedFilePath(file);
+      if (absolutePath === null) return null;
+      return hostPathUsableOnPlatform(absolutePath, environmentPlatformOs) ? absolutePath : null;
+    },
+    [canResolveHostFilePaths, environmentPlatformOs],
   );
 
   // Pasted non-image files become mention chips at the cursor (handled inside
