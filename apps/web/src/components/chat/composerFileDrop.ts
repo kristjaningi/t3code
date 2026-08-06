@@ -42,19 +42,22 @@ export function canResolveComposerHostFilePaths(
  * Relativize an OS path against the workspace root, or null when the path is
  * outside it. Windows paths compare case-insensitively; POSIX paths preserve
  * case so Linux workspaces cannot accidentally resolve to a different file.
+ * Backslashes count as separators only in Windows paths; on POSIX they are
+ * valid filename characters and pass through untouched.
  */
 export function workspaceRelativeDropPath(
   absolutePath: string,
   workspaceRoot: string | null,
 ): string | null {
   if (workspaceRoot === null) return null;
-  const normalizedRoot = normalizePathSeparators(workspaceRoot).replace(/\/+$/, "");
+  const isWindows = isWindowsAbsolutePath(absolutePath) && isWindowsAbsolutePath(workspaceRoot);
+  const normalizedRoot = (
+    isWindows ? normalizePathSeparators(workspaceRoot) : workspaceRoot
+  ).replace(/\/+$/, "");
   if (normalizedRoot.length === 0) return null;
-  const normalizedPath = normalizePathSeparators(absolutePath);
-  const compareCaseInsensitive =
-    isWindowsAbsolutePath(absolutePath) && isWindowsAbsolutePath(workspaceRoot);
-  const comparableRoot = compareCaseInsensitive ? normalizedRoot.toLowerCase() : normalizedRoot;
-  const comparablePath = compareCaseInsensitive ? normalizedPath.toLowerCase() : normalizedPath;
+  const normalizedPath = isWindows ? normalizePathSeparators(absolutePath) : absolutePath;
+  const comparableRoot = isWindows ? normalizedRoot.toLowerCase() : normalizedRoot;
+  const comparablePath = isWindows ? normalizedPath.toLowerCase() : normalizedPath;
   const rootPrefix = `${comparableRoot}/`;
   if (!comparablePath.startsWith(rootPrefix)) return null;
   const relativePath = normalizedPath.slice(rootPrefix.length);
@@ -63,15 +66,16 @@ export function workspaceRelativeDropPath(
 
 /**
  * The path a dropped or pasted OS file should be mentioned by:
- * workspace-relative when inside the workspace, the (separator-normalized)
- * absolute path otherwise.
+ * workspace-relative when inside the workspace, the absolute path otherwise
+ * (separator-normalized only when it is a Windows path).
  */
 export function composerMentionPathFromAbsolute(
   absolutePath: string,
   workspaceRoot: string | null,
 ): string {
   return (
-    workspaceRelativeDropPath(absolutePath, workspaceRoot) ?? normalizePathSeparators(absolutePath)
+    workspaceRelativeDropPath(absolutePath, workspaceRoot) ??
+    (isWindowsAbsolutePath(absolutePath) ? normalizePathSeparators(absolutePath) : absolutePath)
   );
 }
 

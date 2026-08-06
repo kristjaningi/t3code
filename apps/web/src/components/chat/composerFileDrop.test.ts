@@ -53,6 +53,10 @@ describe("workspaceRelativeDropPath", () => {
   it("returns null without a workspace root", () => {
     expect(workspaceRelativeDropPath("/Users/me/repo/a.txt", null)).toBeNull();
   });
+
+  it("preserves backslashes in POSIX filenames", () => {
+    expect(workspaceRelativeDropPath("/Users/me/repo/a\\b.txt", "/Users/me/repo")).toBe("a\\b.txt");
+  });
 });
 
 describe("composerMentionPathFromAbsolute", () => {
@@ -65,6 +69,12 @@ describe("composerMentionPathFromAbsolute", () => {
   it("falls back to the normalized absolute path", () => {
     expect(composerMentionPathFromAbsolute("C:\\other\\notes.txt", "/Users/me/repo")).toBe(
       "C:/other/notes.txt",
+    );
+  });
+
+  it("preserves backslashes in POSIX paths outside the workspace", () => {
+    expect(composerMentionPathFromAbsolute("/tmp/a\\b.txt", "/Users/me/repo")).toBe(
+      "/tmp/a\\b.txt",
     );
   });
 });
