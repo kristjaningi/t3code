@@ -49,18 +49,23 @@ export function workspaceRelativeDropPath(
   absolutePath: string,
   workspaceRoot: string | null,
 ): string | null {
-  if (workspaceRoot === null) return null;
+  if (workspaceRoot === null || workspaceRoot.length === 0) return null;
   const isWindows = isWindowsAbsolutePath(absolutePath) && isWindowsAbsolutePath(workspaceRoot);
+  // A filesystem-root workspace ("/") trims to an empty string here; the
+  // separator appended for the prefix check below restores it.
   const normalizedRoot = (
     isWindows ? normalizePathSeparators(workspaceRoot) : workspaceRoot
   ).replace(/\/+$/, "");
-  if (normalizedRoot.length === 0) return null;
   const normalizedPath = isWindows ? normalizePathSeparators(absolutePath) : absolutePath;
   const comparableRoot = isWindows ? normalizedRoot.toLowerCase() : normalizedRoot;
   const comparablePath = isWindows ? normalizedPath.toLowerCase() : normalizedPath;
-  const rootPrefix = `${comparableRoot}/`;
-  if (!comparablePath.startsWith(rootPrefix)) return null;
-  const relativePath = normalizedPath.slice(rootPrefix.length);
+  if (!comparablePath.startsWith(`${comparableRoot}/`)) return null;
+  // Slice by the original root's length, not the comparable prefix's:
+  // lowercasing can change string length for some Unicode (e.g. "İ"), and a
+  // mismatched offset must fall back to the absolute path, so require the
+  // boundary in the original path to be the separator itself.
+  if (normalizedPath[normalizedRoot.length] !== "/") return null;
+  const relativePath = normalizedPath.slice(normalizedRoot.length + 1);
   return relativePath.length > 0 ? relativePath : null;
 }
 

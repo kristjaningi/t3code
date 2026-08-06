@@ -57,6 +57,20 @@ describe("workspaceRelativeDropPath", () => {
   it("preserves backslashes in POSIX filenames", () => {
     expect(workspaceRelativeDropPath("/Users/me/repo/a\\b.txt", "/Users/me/repo")).toBe("a\\b.txt");
   });
+
+  it("relativizes against a filesystem-root workspace", () => {
+    expect(workspaceRelativeDropPath("/var/log/app.log", "/")).toBe("var/log/app.log");
+    expect(workspaceRelativeDropPath("/", "/")).toBeNull();
+  });
+
+  it("returns null for an empty workspace root", () => {
+    expect(workspaceRelativeDropPath("/var/log/app.log", "")).toBeNull();
+  });
+
+  it("keeps the slice aligned when lowercasing changes string length", () => {
+    // "İ" (U+0130) lowercases to a two-code-point sequence.
+    expect(workspaceRelativeDropPath("C:\\İstanbul\\a.txt", "C:\\İstanbul")).toBe("a.txt");
+  });
 });
 
 describe("composerMentionPathFromAbsolute", () => {
