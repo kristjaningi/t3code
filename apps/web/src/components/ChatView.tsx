@@ -39,6 +39,7 @@ import {
   resolvePromptInjectedEffort,
 } from "@t3tools/shared/model";
 import { CHAT_LIST_ANCHOR_OFFSET } from "@t3tools/shared/chatList";
+import { replaceComposerFileLinksWithBasenames } from "@t3tools/shared/composerInlineTokens";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
 import { truncate } from "@t3tools/shared/String";
 import { nextTerminalId, resolveTerminalSessionLabel } from "@t3tools/shared/terminalLabels";
@@ -4953,7 +4954,9 @@ function ChatViewContent(props: ChatViewProps) {
         firstComposerImageName = firstComposerImage.name;
       }
     }
-    let titleSeed = trimmed;
+    // Mention markup would read as raw "[name](path)" in the thread list;
+    // seed the title with basenames the way the composer renders them.
+    let titleSeed = replaceComposerFileLinksWithBasenames(trimmed).trim();
     if (!titleSeed) {
       if (firstComposerImageName) {
         titleSeed = `Image: ${firstComposerImageName}`;

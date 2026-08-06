@@ -48,6 +48,11 @@ import {
   makeComposerMentionDragHandlers,
 } from "./composerMentionDrag";
 import {
+  composerMentionPathFromAbsolute,
+  partitionDroppedComposerFiles,
+  resolveOsDroppedFilePath,
+} from "./composerFileDrop";
+import {
   type ComposerImageAttachment,
   type DraftId,
   type PersistedComposerImageAttachment,
@@ -2417,6 +2422,17 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     void addComposerImages(imageFiles);
   };
 
+  // Pasted non-image files become mention chips at the cursor (handled inside
+  // the editor's paste command); this resolves the path they are mentioned by.
+  const resolvePastedFilePath = useCallback(
+    (file: File): string | null => {
+      const absolutePath = resolveOsDroppedFilePath(file);
+      if (absolutePath === null) return null;
+      return composerMentionPathFromAbsolute(absolutePath, gitCwd);
+    },
+    [gitCwd],
+  );
+
   const onComposerDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
     if (!event.dataTransfer.types.includes("Files")) return;
     event.preventDefault();
@@ -2447,8 +2463,38 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     event.preventDefault();
     dragDepthRef.current = 0;
     setIsDragOverComposer(false);
-    const files = Array.from(event.dataTransfer.files);
-    void addComposerImages(files);
+    // Images keep the attachment flow; other files become path mentions so
+    // the agent reads them where they already live on disk.
+    const dropped = partitionDroppedComposerFiles(
+      Array.from(event.dataTransfer.files),
+      resolveOsDroppedFilePath,
+      gitCwd,
+    );
+    if (dropped.imageFiles.length > 0) {
+      void addComposerImages(dropped.imageFiles);
+    }
+    // After addComposerImages: its synchronous validation clears the thread
+    // error, and this message must survive a mixed drop.
+    const firstUnresolved = dropped.unresolvedFileNames[0];
+    if (firstUnresolved !== undefined && activeThreadId) {
+      setThreadError(
+        activeThreadId,
+        `Unsupported file type for '${firstUnresolved}'. Please attach image files only.`,
+      );
+    }
+    if (dropped.mentionText !== null) {
+      // No focusComposer() here: the insert path focuses on the next frame,
+      // and focusing synchronously during the drop would sync stale editor
+      // state back over the inserted mention.
+      if (!insertComposerTextAtEnd(dropped.mentionText, { ensureLeadingBoundary: true })) {
+        toastManager.add({
+          type: "error",
+          title: "Unable to add to chat",
+          description: "The composer is busy; try again once it is ready.",
+        });
+      }
+      return;
+    }
     focusComposer();
   };
 
@@ -3077,6 +3123,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                 onChange={onPromptChange}
                 onCommandKeyDown={onComposerCommandKey}
                 onPaste={onComposerPaste}
+                resolvePastedFilePath={resolvePastedFilePath}
                 placeholder={
                   isComposerApprovalState
                     ? (activePendingApproval?.detail ?? "Resolve this approval request to continue")

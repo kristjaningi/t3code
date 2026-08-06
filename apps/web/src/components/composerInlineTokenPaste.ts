@@ -14,6 +14,64 @@ import {
 interface ComposerInlineTokenPasteOptions {
   createMentionNode: (path: string) => LexicalNode;
   getExpandedAbsoluteOffsetForPoint: (node: LexicalNode, pointOffset: number) => number;
+  /**
+   * Resolve a pasted OS file to the path it should be mentioned by, or null
+   * when no path is available (browser builds). Non-image pasted files then
+   * become mention chips at the cursor; image files are left for the
+   * attachment paste handler either way.
+   */
+  resolvePastedFilePath?: (file: File) => string | null;
+}
+
+function $insertPastedFileMentions(
+  event: ClipboardEvent,
+  clipboardData: DataTransfer,
+  options: ComposerInlineTokenPasteOptions,
+): boolean {
+  const resolvePastedFilePath = options.resolvePastedFilePath;
+  if (resolvePastedFilePath === undefined) {
+    return false;
+  }
+  const paths: string[] = [];
+  for (const file of Array.from(clipboardData.files)) {
+    if (file.type.startsWith("image/")) {
+      continue;
+    }
+    const path = resolvePastedFilePath(file);
+    if (path !== null && path.length > 0) {
+      paths.push(path);
+    }
+  }
+  if (paths.length === 0) {
+    return false;
+  }
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) {
+    return false;
+  }
+  const nodes: LexicalNode[] = [];
+  const startPoint = selection.isBackward() ? selection.focus : selection.anchor;
+  const insertionOffset = options.getExpandedAbsoluteOffsetForPoint(
+    startPoint.getNode(),
+    startPoint.offset,
+  );
+  const precedingChar = $getRoot()
+    .getTextContent()
+    .slice(insertionOffset - 1, insertionOffset);
+  if (precedingChar.length > 0 && !/\s/.test(precedingChar)) {
+    nodes.push($createTextNode(" "));
+  }
+  for (const path of paths) {
+    nodes.push(options.createMentionNode(path));
+    // Mention tokens need trailing whitespace to stay valid in the
+    // serialized prompt.
+    nodes.push($createTextNode(" "));
+  }
+  selection.insertNodes(nodes);
+  // Stop the editor's text paste; the event still bubbles, so the composer's
+  // paste handler attaches any image files from the same clipboard.
+  event.preventDefault();
+  return true;
 }
 
 export function registerComposerInlineTokenPaste(
@@ -27,7 +85,7 @@ export function registerComposerInlineTokenPaste(
         return false;
       }
       if (event.clipboardData.files.length > 0) {
-        return false;
+        return $insertPastedFileMentions(event, event.clipboardData, options);
       }
       const text = event.clipboardData.getData("text/plain");
       if (text.length === 0) {
