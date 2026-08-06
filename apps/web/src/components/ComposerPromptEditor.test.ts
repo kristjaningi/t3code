@@ -116,6 +116,43 @@ describe("registerComposerInlineTokenPaste", () => {
     );
   });
 
+  it("appends pasted file mentions when the selection is not a range", () => {
+    vi.stubGlobal("ClipboardEvent", TestClipboardEvent);
+    const editor = createEditor();
+    const source = { name: "app.ts", type: "text/plain" } as File;
+
+    // No selectEnd(): the paste lands with no range selection, as it does
+    // when a chip is node-selected.
+    editor.update(
+      () => {
+        const paragraph = $createParagraphNode();
+        paragraph.append($createTextNode("Ask"));
+        $getRoot().append(paragraph);
+      },
+      { discrete: true },
+    );
+    registerComposerInlineTokenPaste(editor, {
+      createMentionNode: (path) => $createTextNode(`<mention:${path}>`),
+      getExpandedAbsoluteOffsetForPoint: () => 3,
+      resolvePastedFilePath: () => "src/app.ts",
+    });
+
+    const event = new TestClipboardEvent("", [source]);
+    let handled = false;
+    editor.update(
+      () => {
+        handled = editor.dispatchCommand(PASTE_COMMAND, event as ClipboardEvent);
+      },
+      { discrete: true },
+    );
+
+    expect(handled).toBe(true);
+    expect(event.defaultPrevented).toBe(true);
+    expect(editor.getEditorState().read(() => $getRoot().getTextContent())).toBe(
+      "Ask <mention:src/app.ts> ",
+    );
+  });
+
   it("leaves an unavailable pasted file for the parent error handler", () => {
     vi.stubGlobal("ClipboardEvent", TestClipboardEvent);
     const editor = createEditor();

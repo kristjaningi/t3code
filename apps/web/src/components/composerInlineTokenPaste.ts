@@ -46,11 +46,13 @@ function $insertPastedFileMentions(
     return false;
   }
   const selection = $getSelection();
-  if (!$isRangeSelection(selection)) {
-    return false;
-  }
+  // The selection is not always a range when the paste lands (a chip can be
+  // node-selected). Bailing here would drop the files entirely: the default
+  // paste cannot turn them into mentions and the composer's paste handler
+  // prevents it anyway, so fall back to inserting at the end of the prompt.
+  const rangeSelection = $isRangeSelection(selection) ? selection : $getRoot().selectEnd();
   const nodes: LexicalNode[] = [];
-  const startPoint = selection.isBackward() ? selection.focus : selection.anchor;
+  const startPoint = rangeSelection.isBackward() ? rangeSelection.focus : rangeSelection.anchor;
   const insertionOffset = options.getExpandedAbsoluteOffsetForPoint(
     startPoint.getNode(),
     startPoint.offset,
@@ -67,7 +69,7 @@ function $insertPastedFileMentions(
     // serialized prompt.
     nodes.push($createTextNode(" "));
   }
-  selection.insertNodes(nodes);
+  rangeSelection.insertNodes(nodes);
   // Stop the editor's text paste; the event still bubbles, so the composer's
   // paste handler attaches any image files from the same clipboard.
   event.preventDefault();
