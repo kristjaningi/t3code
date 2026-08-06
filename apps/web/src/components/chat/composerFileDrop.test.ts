@@ -1,12 +1,23 @@
 import { describe, expect, it } from "@effect/vitest";
 
 import {
+  canResolveComposerHostFilePaths,
   composerMentionPathFromAbsolute,
   partitionDroppedComposerFiles,
   workspaceRelativeDropPath,
 } from "./composerFileDrop.ts";
 
 const file = (name: string, type: string) => ({ name, type });
+
+describe("canResolveComposerHostFilePaths", () => {
+  it("allows only the primary same-host environment", () => {
+    expect(canResolveComposerHostFilePaths("PrimaryConnectionTarget")).toBe(true);
+    expect(canResolveComposerHostFilePaths("BearerConnectionTarget")).toBe(false);
+    expect(canResolveComposerHostFilePaths("SshConnectionTarget")).toBe(false);
+    expect(canResolveComposerHostFilePaths("RelayConnectionTarget")).toBe(false);
+    expect(canResolveComposerHostFilePaths(null)).toBe(false);
+  });
+});
 
 describe("workspaceRelativeDropPath", () => {
   it("relativizes a path inside the workspace", () => {
@@ -15,10 +26,16 @@ describe("workspaceRelativeDropPath", () => {
     );
   });
 
-  it("ignores workspace root casing and trailing separators", () => {
-    expect(workspaceRelativeDropPath("/Users/Me/Repo/notes.txt", "/users/me/repo/")).toBe(
-      "notes.txt",
-    );
+  it("ignores Windows path casing and trailing separators", () => {
+    expect(
+      workspaceRelativeDropPath("C:\\Users\\Me\\Repo\\notes.txt", "c:\\users\\me\\repo\\"),
+    ).toBe("notes.txt");
+  });
+
+  it("preserves case when comparing POSIX paths", () => {
+    expect(
+      workspaceRelativeDropPath("/home/alice/repo/secrets.txt", "/home/alice/Repo"),
+    ).toBeNull();
   });
 
   it("normalizes Windows separators", () => {

@@ -605,6 +605,7 @@ export interface ChatComposerProps {
   keybindings: ResolvedKeybindingsConfig;
   terminalOpen: boolean;
   gitCwd: string | null;
+  canResolveHostFilePaths: boolean;
 
   // Refs the parent needs kept in sync
   promptRef: React.RefObject<string>;
@@ -696,6 +697,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     keybindings,
     terminalOpen,
     gitCwd,
+    canResolveHostFilePaths,
     promptRef,
     composerRef,
     composerImagesRef,
@@ -2413,25 +2415,41 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   // ------------------------------------------------------------------
   // Callbacks: paste / drag
   // ------------------------------------------------------------------
-  const onComposerPaste = (event: React.ClipboardEvent<HTMLElement>) => {
-    const files = Array.from(event.clipboardData.files);
-    if (files.length === 0) return;
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-    if (imageFiles.length === 0) return;
-    event.preventDefault();
-    void addComposerImages(imageFiles);
-  };
+  const resolveDroppedFileAbsolutePath = useCallback(
+    (file: File): string | null =>
+      canResolveHostFilePaths ? resolveOsDroppedFilePath(file) : null,
+    [canResolveHostFilePaths],
+  );
 
   // Pasted non-image files become mention chips at the cursor (handled inside
   // the editor's paste command); this resolves the path they are mentioned by.
   const resolvePastedFilePath = useCallback(
     (file: File): string | null => {
-      const absolutePath = resolveOsDroppedFilePath(file);
+      const absolutePath = resolveDroppedFileAbsolutePath(file);
       if (absolutePath === null) return null;
       return composerMentionPathFromAbsolute(absolutePath, gitCwd);
     },
-    [gitCwd],
+    [gitCwd, resolveDroppedFileAbsolutePath],
   );
+
+  const onComposerPaste = (event: React.ClipboardEvent<HTMLElement>) => {
+    const files = Array.from(event.clipboardData.files);
+    if (files.length === 0) return;
+    event.preventDefault();
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length > 0) {
+      void addComposerImages(imageFiles);
+    }
+    const firstUnresolved = files.find(
+      (file) => !file.type.startsWith("image/") && resolveDroppedFileAbsolutePath(file) === null,
+    );
+    if (firstUnresolved !== undefined && activeThreadId) {
+      setThreadError(
+        activeThreadId,
+        `'${firstUnresolved.name}' can't be mentioned in this environment. Only image files can be attached.`,
+      );
+    }
+  };
 
   const onComposerDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
     if (!event.dataTransfer.types.includes("Files")) return;
@@ -2467,7 +2485,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     // the agent reads them where they already live on disk.
     const dropped = partitionDroppedComposerFiles(
       Array.from(event.dataTransfer.files),
-      resolveOsDroppedFilePath,
+      resolveDroppedFileAbsolutePath,
       gitCwd,
     );
     if (dropped.imageFiles.length > 0) {
@@ -2479,7 +2497,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     if (firstUnresolved !== undefined && activeThreadId) {
       setThreadError(
         activeThreadId,
-        `Unsupported file type for '${firstUnresolved}'. Please attach image files only.`,
+        `'${firstUnresolved}' can't be mentioned in this environment. Only image files can be attached.`,
       );
     }
     if (dropped.mentionText !== null) {

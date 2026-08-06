@@ -1,3 +1,4 @@
+import type { ConnectionTarget } from "@t3tools/client-runtime/connection";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 
 /**
@@ -22,11 +23,25 @@ function normalizePathSeparators(path: string): string {
   return path.replaceAll("\\", "/");
 }
 
+function isWindowsAbsolutePath(path: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("\\\\");
+}
+
+/**
+ * A desktop renderer can only hand an agent host paths when the selected
+ * environment is the primary backend on that same host. Saved remotes, SSH,
+ * relays, and desktop-local WSL backends have different filesystems.
+ */
+export function canResolveComposerHostFilePaths(
+  targetTag: ConnectionTarget["_tag"] | null,
+): boolean {
+  return targetTag === "PrimaryConnectionTarget";
+}
+
 /**
  * Relativize an OS path against the workspace root, or null when the path is
- * outside it. Comparison is case-insensitive: the dominant filesystems on
- * macOS and Windows are, and a false negative merely falls back to the
- * absolute path.
+ * outside it. Windows paths compare case-insensitively; POSIX paths preserve
+ * case so Linux workspaces cannot accidentally resolve to a different file.
  */
 export function workspaceRelativeDropPath(
   absolutePath: string,
@@ -36,8 +51,12 @@ export function workspaceRelativeDropPath(
   const normalizedRoot = normalizePathSeparators(workspaceRoot).replace(/\/+$/, "");
   if (normalizedRoot.length === 0) return null;
   const normalizedPath = normalizePathSeparators(absolutePath);
-  const rootPrefix = `${normalizedRoot.toLowerCase()}/`;
-  if (!normalizedPath.toLowerCase().startsWith(rootPrefix)) return null;
+  const compareCaseInsensitive =
+    isWindowsAbsolutePath(absolutePath) && isWindowsAbsolutePath(workspaceRoot);
+  const comparableRoot = compareCaseInsensitive ? normalizedRoot.toLowerCase() : normalizedRoot;
+  const comparablePath = compareCaseInsensitive ? normalizedPath.toLowerCase() : normalizedPath;
+  const rootPrefix = `${comparableRoot}/`;
+  if (!comparablePath.startsWith(rootPrefix)) return null;
   const relativePath = normalizedPath.slice(rootPrefix.length);
   return relativePath.length > 0 ? relativePath : null;
 }
