@@ -440,6 +440,23 @@ export const PickFolderOptionsSchema = Schema.Struct({
   targetEnvironmentId: Schema.optionalKey(Schema.String),
 });
 
+/**
+ * A file returned by the desktop theme-file picker. Oversized files carry an
+ * empty text so the renderer can reject them by size without the main
+ * process ever holding their contents.
+ */
+export interface PickedThemeFile {
+  name: string;
+  size: number;
+  text: string;
+}
+
+export const PickedThemeFileSchema = Schema.Struct({
+  name: Schema.String,
+  size: Schema.Number,
+  text: Schema.String,
+});
+
 export interface DesktopWslDistro {
   name: string;
   isDefault: boolean;
@@ -1025,6 +1042,12 @@ export interface DesktopBridge {
    * dropped file lives. Optional: absent on web builds and older shells.
    */
   getPathForFile?: (file: File) => string;
+  /**
+   * Multi-select JSON file picker that opens in the VS Code extensions
+   * directory when one exists. Optional: older desktop builds lack it, and
+   * web callers fall back to a plain file input.
+   */
+  pickThemeFiles?: () => Promise<readonly PickedThemeFile[] | null>;
   confirm: (message: string) => Promise<boolean>;
   setTheme: (theme: DesktopTheme) => Promise<void>;
   showContextMenu: <T extends string>(
